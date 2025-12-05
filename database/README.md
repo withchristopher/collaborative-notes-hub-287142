@@ -45,6 +45,8 @@ collaborative-notes-hub-287142/
 
 This directory is optional. If it does not exist or is empty, the build still succeeds.
 
-## Note on db_visualizer
+## Note on db_visualizer and build orchestration
 
 Some workflows use a database visualizer tool. There is no requirement to include a `db_visualizer` directory in this container, and no build step will attempt to `cd` into it. If you need such a tool, add it as a separate service or create a directory where appropriate, but it is not required for building this image.
+
+Important: Any higher-level build or run orchestrators (e.g., compose files, Makefiles, CI jobs, project manifests) must reference only the database directory root (collaborative-notes-hub-287142/database) for building. Do not cd into any db_visualizer path. The provided docker-build.sh builds the image from the database directory root.
