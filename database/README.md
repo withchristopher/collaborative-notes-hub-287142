@@ -98,19 +98,18 @@ Provisioning summary (executed now via psql -c, one statement at a time):
 Exact one-liners executed (port/user taken from db_connection.txt):
 - $(cat db_connection.txt) -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
 - $(cat db_connection.txt) -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
-- $(cat db_connection.txt) -c "CREATE TABLE IF NOT EXISTS notes ( id uuid PRIMARY KEY DEFAULT gen_random_uuid(), title text NOT NULL, content text NOT NULL, tags text[] DEFAULT '{}', is_archived boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now() );"
-- $(cat db_connection.txt) -c "CREATE TABLE IF NOT EXISTS note_history ( id uuid PRIMARY KEY DEFAULT gen_random_uuid(), note_id uuid NOT NULL REFERENCES notes(id) ON DELETE CASCADE, title text NOT NULL, content text NOT NULL, tags text[] DEFAULT '{}', changed_at timestamptz NOT NULL DEFAULT now(), changed_by text DEFAULT 'system', change_type text NOT NULL );"
-- Function creation, if quoting issues occur:
-  - Write SQL to file and execute:
-    - cat > /tmp/create_fn.sql <<'SQL'
-      CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger AS $$
-      BEGIN
-        NEW.updated_at = now();
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
-      SQL
-    - $(cat db_connection.txt | sed 's/^psql //') -f /tmp/create_fn.sql
+- $(cat db_connection.txt) -c "CREATE TABLE IF NOT EXISTS notes ( id uuid PRIMARY KEY DEFAULT gen_random_uuid(), title text NOT NULL, content text NOT NULL, tags text[] DEFAULT ARRAY[]::text[], is_archived boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now() );"
+- $(cat db_connection.txt) -c "CREATE TABLE IF NOT EXISTS note_history ( id uuid PRIMARY KEY DEFAULT gen_random_uuid(), note_id uuid NOT NULL REFERENCES notes(id) ON DELETE CASCADE, title text NOT NULL, content text NOT NULL, tags text[] DEFAULT ARRAY[]::text[], changed_at timestamptz NOT NULL DEFAULT now(), changed_by text DEFAULT 'system', change_type text NOT NULL );"
+- Function creation (safe approach using a temp file to avoid shell quoting issues):
+  - cat >/tmp/create_fn.sql <<'SQL'
+    CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger AS $$
+    BEGIN
+      NEW.updated_at = now();
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+    SQL
+  - $(cat db_connection.txt | sed 's/^psql //') -f /tmp/create_fn.sql
 - $(cat db_connection.txt) -c "DROP TRIGGER IF EXISTS trg_set_updated_at ON notes;"
 - $(cat db_connection.txt) -c "CREATE TRIGGER trg_set_updated_at BEFORE UPDATE ON notes FOR EACH ROW EXECUTE FUNCTION set_updated_at();"
 - $(cat db_connection.txt) -c "CREATE INDEX IF NOT EXISTS idx_notes_tags ON notes USING GIN (tags);"
@@ -125,4 +124,6 @@ Seed data (each as its own statement):
 - $(cat db_connection.txt) -c "INSERT INTO notes (title, content, tags, is_archived) VALUES ('Product roadmap', 'Q1 roadmap highlights: discovery, MVP, feedback loop.', ARRAY['product','roadmap'], false);"
 
 Port consistency
-- Always use the exact connection in database/db_connection.txt. If any runtime metadata shows a different exposed port, prefer db_connection.txt to avoid mismatches.
+- db_connection.txt currently indicates port 5000 (psql postgresql://appuser:dbuser123@localhost:5000/myapp).
+- Runtime metadata for the database container shows an external URL on port 5001. This may be a proxy/edge port.
+- Always prefer and use the exact psql connection saved in database/db_connection.txt for all operations; this is the authoritative local endpoint.
