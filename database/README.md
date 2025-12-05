@@ -45,6 +45,18 @@ collaborative-notes-hub-287142/
 
 This directory is optional. If it does not exist or is empty, the build still succeeds.
 
+## Verification and CI note
+
+- Verified: No remaining references to `collaborative-notes-hub-287142/database/db_visualizer` in Dockerfiles, compose files, Makefiles, shell scripts, CI configs, or `.project_manifest.yaml`.
+- Correct build path: All orchestrators must build the image from `collaborative-notes-hub-287142/database` (this directory). The provided `docker-build.sh` already does this.
+
+If your CI/runner environment does not have Docker available, the build will fail with an error like `docker: command not found`. In that case:
+- Install Docker in the CI environment or use a Docker-enabled runner, or
+- Skip image build in that environment and build locally using:
+  ```
+  cd collaborative-notes-hub-287142/database && bash docker-build.sh
+  ```
+
 ## Note on db_visualizer and build orchestration
 
 Some workflows use a database visualizer tool. There is no requirement to include a `db_visualizer` directory in this container, and no build step will attempt to `cd` into it. If you need such a tool, add it as a separate service or create a directory where appropriate, but it is not required for building this image.
