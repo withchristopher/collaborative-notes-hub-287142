@@ -20,8 +20,9 @@ What this setup includes:
 How to connect:
 - Using saved connection (recommended):
   - cat db_connection.txt
-  - Example: psql postgresql://appuser:dbuser123@localhost:5000/myapp
-- Standard psql flags:
+  - Then copy/paste the exact psql command contained in the file.
+  - Example currently saved: psql postgresql://appuser:dbuser123@localhost:5000/myapp
+- Standard psql flags (ensure the port matches db_connection.txt):
   - psql -h localhost -U appuser -d myapp -p 5000
 
 Operational notes:
@@ -34,12 +35,12 @@ Operational notes:
 
 Environment variables for other containers:
 - DATABASE_URL (backend and integrations):
-  - postgresql://appuser:dbuser123@localhost:5000/myapp
-  - Prefer reading from database/db_connection.txt to keep consistency.
+  - Use the exact string in database/db_connection.txt (strip the leading `psql `) for consistency.
+  - Example: postgresql://appuser:dbuser123@localhost:5000/myapp
 - db_visualizer.env:
   - Source db_visualizer/postgres.env for a lightweight DB inspection server.
 
-Schema overview:
+Schema overview (as provisioned):
 
 notes
 - id uuid PK DEFAULT gen_random_uuid()
@@ -61,20 +62,34 @@ note_history
 - change_type text NOT NULL
 
 Indexes
-- CREATE INDEX idx_notes_tags ON notes USING GIN (tags);
-- CREATE INDEX idx_notes_updated_at ON notes (updated_at DESC);
+- CREATE INDEX IF NOT EXISTS idx_notes_tags ON notes USING GIN (tags);
+- CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes (updated_at DESC);
 
 Triggers
-- set_updated_at() plpgsql -> BEFORE UPDATE ON notes sets updated_at=now()
-- CREATE TRIGGER trg_set_updated_at BEFORE UPDATE ON notes FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+- Function: set_updated_at() plpgsql -> BEFORE UPDATE ON notes sets updated_at=now()
+- Trigger: CREATE TRIGGER trg_set_updated_at BEFORE UPDATE ON notes FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 Port reconciliation:
 - The database is provisioned on port 5000 as per startup.sh and db_connection.txt.
-- Running metadata may show the database container exposed at another port, but the actual PostgreSQL server listens on 5000 inside this environment. Always use the connection string in db_connection.txt for the correct endpoint.
+- Running metadata may show the database container exposed at another port. Always use the connection string in db_connection.txt for the correct endpoint to avoid mismatches.
 
 Seeding:
-- Initial sample notes are inserted individually to validate the schema and make the UI usable immediately.
+- Initial sample notes are inserted individually to validate the schema and make the UI usable immediately (three sample notes inserted).
 
 If you need to reset data:
 - Drop tables manually (use the connection above), then re-run the individual statements as needed, or run restore_db.sh with a prepared backup.
 
+Provisioning summary (executed via psql -c, one statement at a time):
+- CREATE EXTENSION IF NOT EXISTS pgcrypto;
+- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+- CREATE TABLE IF NOT EXISTS notes (...);
+- CREATE TABLE IF NOT EXISTS note_history (...);
+- CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $$;
+- DROP TRIGGER IF EXISTS trg_set_updated_at ON notes;
+- CREATE TRIGGER trg_set_updated_at BEFORE UPDATE ON notes FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+- CREATE INDEX IF NOT EXISTS idx_notes_tags ON notes USING GIN (tags);
+- CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes (updated_at DESC);
+- GRANT USAGE, CREATE ON SCHEMA public TO appuser;
+- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO appuser;
+- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO appuser;
+- INSERT sample notes (3 rows, one INSERT per statement).
